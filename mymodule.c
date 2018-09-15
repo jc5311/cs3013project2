@@ -11,6 +11,7 @@
 #include <linux/syscalls.h>
 #include <linux/sched.h>
 #include <linux/list.h>
+#include <asm-generic/cputime.h>
 #include "processinfo.h"
 
 unsigned long **sys_call_table;
@@ -49,7 +50,6 @@ asmlinkage long cs3013_syscall2(struct processinfo *pinfo){
   func_pinfo.state = task->state;
   func_pinfo.pid = task->pid;
   func_pinfo.parent_pid = task->parent->pid;
-  func_pinfo.uid = task->cred->uid.val;
 
   //gather child and sibling information
   //begin with finding the youngest child
@@ -61,72 +61,79 @@ asmlinkage long cs3013_syscall2(struct processinfo *pinfo){
     //the youngest child should be the one with the latest start_time
     //func_pinfo->youngest_child = list_last_entry(&task->children, struct task_struct, children)->pid;
     
-    struct list_head *p1;
+    struct list_head *p;
     static LIST_HEAD(child_list);
-    struct task_struct *c1;
+    struct task_struct *c;
     struct task_struct *youngest;
     youngest->start_time = 0;
 
     //loop through children list. Keep track of which has the latest start_time
-    list_for_each(p1, &child_list){
-      c1 = list_entry(p1, struct task_struct, children);
-      if((c1->start_time) > youngest->start_time){
-        youngest = c1;
+    list_for_each(p, &child_list){
+      c = list_entry(p, struct task_struct, children);
+      if((c->start_time) > youngest->start_time){
+        youngest = c;
       }
     }
     func_pinfo.youngest_child = youngest->pid;
   }
 
   //find younger sibling
-  u64 reference_time = task->start_time;
-  struct list_head *p2;
-  struct task_struct *s2;
-  struct task_struct *younger_sibling;
-  static LIST_HEAD(sibling_list);
-  u64 time_difference;
-  u64 shortest_time = reference_time;
-
   //loop through the sibling list
   //find which has a start_time larger than the current process and is closer to it
   if (list_empty(&task->sibling)){
     func_pinfo.younger_sibling = -1;
   }
   else{
-    list_for_each(p2, &sibling_list){
-      s2 = list_entry(p2, struct task_struct, sibling);
-      time_difference = s2->start_time - reference_time;
+    struct list_head *p;
+    struct task_struct *s;
+    struct task_struct *younger_sibling;
+    static LIST_HEAD(sibling_list);
+    u64 time_difference;
+    u64 reference_time = task->start_time;
+    u64 shortest_time = reference_time;
+
+    list_for_each(p, &sibling_list){
+      s = list_entry(p, struct task_struct, sibling);
+      time_difference = s->start_time - reference_time;
       if ((time_difference > 0) && (time_difference < shortest_time)){
         shortest_time = time_difference;
-        younger_sibling = s2;
+        younger_sibling = s;
       }
     }
     func_pinfo.younger_sibling = younger_sibling->pid;
   }
 
   //find older sibling
-  struct list_head *p3;
-  struct task_struct *s3;
-  struct task_struct *older_sibling;
-  shortest_time = reference_time;
-
   //loop through the sibling lst
   //find which has a start time smaller than the current process and is closer to it
   if (list_empty(&task->sibling)){
     func_pinfo.older_sibling = -1;
   }
   else{
-    list_for_each(p3, &sibling_list){
-      s3 = list_entry(p3, struct task_struct, sibling);
-      time_difference = s3->start_time - reference_time;
+    struct list_head *p;
+    struct task_struct *s;
+    struct task_struct *older_sibling;
+    static LIST_HEAD(sibling_list);
+    u64 time_difference;
+    u64 reference_time = task->start_time;
+    u64 shortest_time = reference_time;
+
+    list_for_each(p, &sibling_list){
+      s = list_entry(p, struct task_struct, sibling);
+      time_difference = s->start_time - reference_time;
       if ((time_difference < 0) && (time_difference < shortest_time)){
         shortest_time = time_difference;
-        older_sibling = s3;
+        older_sibling = s;
       }
     }
     func_pinfo.older_sibling = older_sibling->pid;
   }
 
-  func_pinfo.start_time = task->start_time;
+  //start filling in the rest of the data
+  func_pinfo.uid = task->cred->uid.val;
+  func_pinfo.start_time = task->start_time; //there doesn't look to be a timespec var...
+  func_pinfo.user_time = cputime_to_usecs(task->utime);
+  func_pinfo.sys_time = cputime_to_usecs(task->stime);
   
 
 
