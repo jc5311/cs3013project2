@@ -134,6 +134,31 @@ asmlinkage long cs3013_syscall2(struct processinfo *pinfo){
   func_pinfo.start_time = task->start_time; //there doesn't look to be a timespec var...
   func_pinfo.user_time = cputime_to_usecs(task->utime);
   func_pinfo.sys_time = cputime_to_usecs(task->stime);
+
+  //we need to iterate through the children if there are any to collect
+  //their user and system times; also since we do have to iterate through them
+  //all we will have to accumulate their times, initialize the appropriate
+  //values to zero
+  func_pinfo.cutime = 0;
+  func_pinfo.cstime = 0;
+  if (!list_empty(&task->sibling)){
+    //there are children so let's continue
+    struct list_head *p;
+    struct task_struct *s;
+    static LIST_HEAD(children_list);
+    cputime_t acc_utime = 0;
+    cputime_t acc_stime = 0;
+
+    list_for_each(p, &children_list){
+      s = list_entry(p, struct task_struct, children);
+      acc_utime += s->utime;
+      acc_stime += s->stime;
+    }
+
+    func_pinfo.cutime = cputime_to_usecs(acc_utime);
+    func_pinfo.cstime = cputime_to_usecs(acc_stime);
+
+  }
   
 
 
