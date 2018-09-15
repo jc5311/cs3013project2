@@ -12,6 +12,7 @@
 #include <linux/sched.h>
 #include <linux/list.h>
 #include <asm-generic/cputime.h>
+#include <asm-generic/uaccess.h>
 #include "processinfo.h"
 
 unsigned long **sys_call_table;
@@ -41,7 +42,7 @@ asmlinkage long (*ref_sys_cs3013_syscall2)(void);
 	return ref_sys_close(fd);
 }*/
 
-asmlinkage long cs3013_syscall2(struct processinfo *pinfo){
+asmlinkage long cs3013_syscall2(struct processinfo *info){
   struct task_struct *task = current;
   struct processinfo func_pinfo; //never blindly follow pointers! Create a temporary process info struct to fill.
   printk(KERN_INFO "current process: %s, PID: %d", task->comm, task->pid);
@@ -160,7 +161,10 @@ asmlinkage long cs3013_syscall2(struct processinfo *pinfo){
 
   }
   
-
+  if (copy_to_user(info, &func_pinfo, sizeof func_pinfo)){
+    //if we get here there was an error
+    return EFAULT;
+  }
 
   return 0;
 }
